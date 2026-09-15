@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+.dev.vars
+node_modules
+dist
+.local
+backups
+.wrangler
+.sites-runtime
+.next
+.vinext
+.openai
+evidence
+individual
+*.tsbuildinfo
+*.log

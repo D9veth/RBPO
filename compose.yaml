@@ -1,0 +1,63 @@
+name: campus-pass
+services:
+  db:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: campus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run node scripts/setup.mjs first}
+      POSTGRES_DB: campus
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U campus -d campus']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    shm_size: 128mb
+  app:
+    image: ${APP_IMAGE:-campus-pass:local}
+    build:
+      context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}
+        GO_IMAGE: ${GO_IMAGE:-golang:1.26.8-alpine}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://campus:${POSTGRES_PASSWORD}@db:5432/campus?sslmode=disable
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      APP_SECRET: ${APP_SECRET:?Run node scripts/setup.mjs first}
+    ports:
+      - '127.0.0.1:${APP_PORT:-8080}:8080'
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    pids_limit: 100
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    profiles: [production]
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      TLS_EMAIL: ${TLS_EMAIL:-admin@example.invalid}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  database:
+  caddy_data:
+  caddy_config:
